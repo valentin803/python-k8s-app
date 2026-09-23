@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: CI-CD Python Kubernetes App
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,4 +25,19 @@ jobs:
         with:
           context: .
           push: true
-          tags: valentin988/python-k8s-app:latest
+          tags: |
+            valentin988/python-k8s-app:latest
+            valentin988/python-k8s-app:${{ github.sha }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.K8S_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.K8S_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to Kubernetes
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+          "${{ secrets.K8S_USER }}@${{ secrets.K8S_HOST }}" \
+          "kubectl set image deployment/python-app python-app=valentin988/python-k8s-app:${{ github.sha }} && kubectl rollout status deployment/python-app --timeout=120s"
